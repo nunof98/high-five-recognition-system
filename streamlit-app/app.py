@@ -1,7 +1,8 @@
+import io
+
+import pandas as pd
 import streamlit as st
 from csv_client import CSVClient
-import pandas as pd
-import io
 
 # Admin password (change this or set in Streamlit secrets!)
 ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD")
@@ -244,7 +245,9 @@ def show_admin_page():
         if password:
             st.error("❌ Incorrect password")
         st.stop()
-    st.success("✅ Access granted")
+
+    if not st.session_state.get("access_granted_shown", False):
+        st.session_state["access_granted_shown"] = True
 
     try:
         csv_client = CSVClient()
@@ -297,6 +300,24 @@ def show_admin_page():
                             f"✅ Successfully deleted {len(selected_rows)} record(s)!"
                         )
                         st.rerun()
+
+            # Delete all data button
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if st.button("🗑️ Delete ALL Data", type="secondary", width="stretch"):
+                    if st.session_state.get("confirm_delete_all", False):
+                        csv_client._save_data(pd.DataFrame(columns=df.columns))
+                        st.session_state["confirm_delete_all"] = False
+                        st.success("✅ All data deleted!")
+                        st.rerun()
+                    else:
+                        st.session_state["confirm_delete_all"] = True
+                        st.rerun()
+
+            if st.session_state.get("confirm_delete_all", False):
+                st.warning(
+                    "⚠️ Are you sure? Click **Delete ALL Data** again to confirm."
+                )
 
             st.markdown("---")
 
