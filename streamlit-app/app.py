@@ -1,7 +1,8 @@
+import io
+
+import pandas as pd
 import streamlit as st
 from csv_client import CSVClient
-import pandas as pd
-import io
 
 # Admin password (change this or set in Streamlit secrets!)
 ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD")
@@ -14,24 +15,52 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+st.markdown(
+    """
+    <style>
+        /* Push the header down to make room for brandline */
+        header[data-testid="stHeader"] {
+            top: 8px !important;
+        }
+
+        /* Inject brandline above the header */
+        header[data-testid="stHeader"]::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 8px;
+            z-index: 9999999;
+            background-image: url('./app/static/brandline.png');
+            background-size: cover;
+            background-repeat: no-repeat;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # Custom CSS for brand colors and styling
 st.markdown(
     """
 <style>
     .main {
-        background: linear-gradient(135deg, #FF9900 0%, #FFE79B 100%);
+        #background: linear-gradient(135deg, #FF9900 0%, #FFE79B 100%);
     }
     .stApp {
-        background: linear-gradient(135deg, #FF9900 0%, #FFE79B 100%);
+        #background: linear-gradient(135deg, #FF9900 0%, #FFE79B 100%);
     }
     div[data-testid="stForm"] {
-        background-color: white;
+        # background-color: white;
+        background-color: var(--secondary-background-color);
         padding: 2rem;
         border-radius: 15px;
         box-shadow: 0 10px 40px rgba(0,0,0,0.2);
     }
     .success-card {
-        background-color: white;
+        # background-color: white;
+        background-color: var(--secondary-background-color);
         padding: 2rem;
         border-radius: 15px;
         box-shadow: 0 10px 40px rgba(0,0,0,0.2);
@@ -52,11 +81,8 @@ st.markdown(
         text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
     }
     .stTextArea textarea, .stTextInput input {
-        border: 2px solid #e0e0e0;
+        # border: 2px solid;
         border-radius: 8px;
-    }
-    .stTextArea textarea:focus, .stTextInput input:focus {
-        border-color: #FF9900;
     }
 </style>
 """,
@@ -64,13 +90,11 @@ st.markdown(
 )
 
 # Color mapping
-COLORS = {
-    "red": "#e74c3c",
-    "blue": "#3498db",
-    "green": "#2ecc71",
-    "yellow": "#f39c12",
-    "purple": "#9b59b6",
-    "orange": "#FF9900",
+CATEGORY_COLORS = {
+    "collaboration_excellence": "#9E2896",
+    "knowledge_growth": "#007BC0",
+    "supplier_management": "#18837E",
+    "performance_delivery": "#00884A",
 }
 
 
@@ -83,28 +107,35 @@ def get_query_params():
         if query_params.get("admin", None) is not None:
             return "admin", None
 
-        # Otherwise get token and color
+        # Otherwise get token and category
         token = query_params.get("token", None)
-        color = query_params.get("color", None)
-        return token, color
+        category = query_params.get("category", None)
+        return token, category
     except Exception:
         return None, None
+
+
+def format_category(category: str) -> str:
+    """Format snake_case category to display name"""
+    return category.replace("_", " ").title()
 
 
 def display_existing_message(data):
     """Display an existing High Five message"""
     st.markdown("# 🎉 High Five Already Given!")
 
-    color_hex = COLORS.get(data["Color"].lower(), "#333")
+    color_hex = CATEGORY_COLORS.get(data["Category"], "#333")
 
     st.markdown(
         f"""
     <div class="success-card">
         <div style="border-left: 4px solid {color_hex}; padding-left: 15px;">
             <div class="color-badge" style="color: {color_hex};">
-                {data["Color"].upper()} Token
+                {format_category(data["Category"]).upper()} Token
             </div>
-            <p style="font-size: 1.2em; margin: 15px 0;"><strong>"{data["Message"]}"</strong></p>
+            <p style="font-size: 1.2em; margin: 15px 0; background-color: {color_hex}; color: white; border-radius: 8px; padding: 10px;">
+                <strong>"{data["Message"]}"</strong>
+            </p>
             <p style="color: #999; font-size: 0.8em; margin-top: 10px;">
                 {data["Timestamp"]}
             </p>
@@ -115,26 +146,41 @@ def display_existing_message(data):
     )
 
 
-def show_new_token_form(token, color):
+def show_new_token_form(token, category):
     """Display form for new High Five submission"""
     st.markdown("# ✋ Give Your High Five!")
 
     with st.form("highfive_form", clear_on_submit=True):
-        # Display token color
-        color_hex = COLORS.get(color.lower(), "#333")
+        # Display token category
+        color_hex = CATEGORY_COLORS.get(category, "#333")
+
+        # Inject dynamic CSS for input backgrounds matching category color
+        st.markdown(
+            f"""
+            <style>
+                .stTextArea textarea, .stTextInput input {{
+                    border: 2px solid {color_hex} !important;
+                }}
+                .stTextArea textarea:focus, .stTextInput input:focus {{
+                    background-color: {color_hex}20 !important;
+                    border-color: {color_hex} !important;
+                }}
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
         st.markdown(
             f"""
         <div>
-            <label style="font-weight: 600; color: #555;">Token Color:</label>
+            <label style="font-weight: 600;">Token:</label>
             <div class="color-badge" style="color: {color_hex};">
-                {color.upper()}
+                {format_category(category).upper()}
             </div>
         </div>
         """,
             unsafe_allow_html=True,
         )
-
-        st.markdown("<br>", unsafe_allow_html=True)
 
         # Message input
         message = st.text_area(
@@ -165,7 +211,7 @@ def show_new_token_form(token, color):
                     csv_client = CSVClient()
                     success = csv_client.add_token(
                         token=token,
-                        color=color,
+                        category=category,
                         message=message,
                         submitted_by=submitted_by,
                     )
@@ -185,7 +231,7 @@ def show_new_token_form(token, color):
 
 def show_success_message():
     """Display success message after submission"""
-    st.markdown("# ✅ High Five Sent!")
+    st.markdown("# High Five Sent!")
     st.markdown(
         """
     <div class="success-card">
@@ -223,7 +269,9 @@ def show_admin_page():
         if password:
             st.error("❌ Incorrect password")
         st.stop()
-    st.success("✅ Access granted")
+
+    if not st.session_state.get("access_granted_shown", False):
+        st.session_state["access_granted_shown"] = True
 
     try:
         csv_client = CSVClient()
@@ -252,7 +300,7 @@ def show_admin_page():
                         default=False,
                     )
                 },
-                disabled=["TokenID", "Color", "Message", "SubmittedBy", "Timestamp"],
+                disabled=["TokenID", "Category", "Message", "SubmittedBy", "Timestamp"],
             )
 
             # Delete selected records
@@ -276,6 +324,24 @@ def show_admin_page():
                             f"✅ Successfully deleted {len(selected_rows)} record(s)!"
                         )
                         st.rerun()
+
+            # Delete all data button
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if st.button("🗑️ Delete ALL Data", type="secondary", width="stretch"):
+                    if st.session_state.get("confirm_delete_all", False):
+                        csv_client._save_data(pd.DataFrame(columns=df.columns))
+                        st.session_state["confirm_delete_all"] = False
+                        st.success("✅ All data deleted!")
+                        st.rerun()
+                    else:
+                        st.session_state["confirm_delete_all"] = True
+                        st.rerun()
+
+            if st.session_state.get("confirm_delete_all", False):
+                st.warning(
+                    "⚠️ Are you sure? Click **Delete ALL Data** again to confirm."
+                )
 
             st.markdown("---")
 
@@ -314,12 +380,17 @@ def show_admin_page():
                     unsafe_allow_html=True,
                 )
             with col2:
-                color_counts = df["Color"].value_counts()
-                most_popular = (
-                    color_counts.index[0] if not color_counts.empty else "N/A"
+                category_counts = df["Category"].value_counts()
+                most_popular_raw = (
+                    category_counts.index[0] if not category_counts.empty else None
                 )
+                most_popular = (
+                    format_category(most_popular_raw) if most_popular_raw else "N/A"
+                )
+                color_hex = CATEGORY_COLORS.get(most_popular_raw, "#333")
                 st.markdown(
-                    f"<div style='text-align:center;'><b>Most Popular Color</b><br><span style='font-size:1.5em'>{most_popular}</span></div>",
+                    f"<div style='text-align:center;'><b>Most Popular Category</b><br>"
+                    f"<span style='font-size:1.5em; color:{color_hex}'>{most_popular}</span></div>",
                     unsafe_allow_html=True,
                 )
             with col3:
@@ -336,19 +407,18 @@ def show_admin_page():
 
 
 def show_admin_button():
-    """Display floating admin button on main pages"""
-    st.markdown('<div class="admin-button-container">', unsafe_allow_html=True)
-    if st.button("🔐 Admin", key="admin_access_btn"):
-        st.session_state["show_admin"] = True
-        st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
+    """Display admin button in sidebar"""
+    with st.sidebar:
+        if st.button("🔐 Admin", key="admin_access_btn"):
+            st.session_state["show_admin"] = True
+            st.rerun()
 
 
 def main():
     """Main application logic"""
 
     # Check for admin mode via URL param or session state
-    token, color = get_query_params()
+    token, category = get_query_params()
     if token == "admin" or st.session_state.get("show_admin", False):
         show_admin_page()
         return
@@ -357,8 +427,8 @@ def main():
     show_admin_button()
 
     # Validate parameters
-    if not token or not color:
-        show_error_message("Invalid QR code. Missing token or color parameter.")
+    if not token or not category:
+        show_error_message("Invalid QR code. Missing token or category parameter.")
         st.stop()
 
     # Check if form was just submitted
@@ -377,7 +447,7 @@ def main():
             display_existing_message(existing_data)
         else:
             # New token - show form
-            show_new_token_form(token, color)
+            show_new_token_form(token, category)
 
     except Exception as e:
         show_error_message(
