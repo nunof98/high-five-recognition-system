@@ -1,14 +1,9 @@
-[theme]
-primaryColor = "#FF9900"
-backgroundColor = "#FFFFFF"
-textColor = "#333333"
-font = "sans serif"
-
 [server]
 headless = true
 enableCORS = false
 enableXsrfProtection = true
 fileWatcherType = "none"
+enableStaticServing = true
 
 [browser]
 gatherUsageStats = false

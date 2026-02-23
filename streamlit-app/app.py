@@ -15,24 +15,52 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+st.markdown(
+    """
+    <style>
+        /* Push the header down to make room for brandline */
+        header[data-testid="stHeader"] {
+            top: 8px !important;
+        }
+
+        /* Inject brandline above the header */
+        header[data-testid="stHeader"]::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 8px;
+            z-index: 9999999;
+            background-image: url('./app/static/brandline.png');
+            background-size: cover;
+            background-repeat: no-repeat;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # Custom CSS for brand colors and styling
 st.markdown(
     """
 <style>
     .main {
-        background: linear-gradient(135deg, #FF9900 0%, #FFE79B 100%);
+        #background: linear-gradient(135deg, #FF9900 0%, #FFE79B 100%);
     }
     .stApp {
-        background: linear-gradient(135deg, #FF9900 0%, #FFE79B 100%);
+        #background: linear-gradient(135deg, #FF9900 0%, #FFE79B 100%);
     }
     div[data-testid="stForm"] {
-        background-color: white;
+        # background-color: white;
+        background-color: var(--secondary-background-color);
         padding: 2rem;
         border-radius: 15px;
         box-shadow: 0 10px 40px rgba(0,0,0,0.2);
     }
     .success-card {
-        background-color: white;
+        # background-color: white;
+        background-color: var(--secondary-background-color);
         padding: 2rem;
         border-radius: 15px;
         box-shadow: 0 10px 40px rgba(0,0,0,0.2);
@@ -53,11 +81,8 @@ st.markdown(
         text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
     }
     .stTextArea textarea, .stTextInput input {
-        # border: 2px solid #e0e0e0;
+        # border: 2px solid;
         border-radius: 8px;
-    }
-    .stTextArea textarea:focus, .stTextInput input:focus {
-        # border-color: #FF9900;
     }
 </style>
 """,
@@ -134,11 +159,10 @@ def show_new_token_form(token, category):
             f"""
             <style>
                 .stTextArea textarea, .stTextInput input {{
-                    background-color: white !important;
                     border: 2px solid {color_hex} !important;
                 }}
                 .stTextArea textarea:focus, .stTextInput input:focus {{
-                    background-color: {color_hex}18 !important;
+                    background-color: {color_hex}20 !important;
                     border-color: {color_hex} !important;
                 }}
             </style>
@@ -357,13 +381,12 @@ def show_admin_page():
                 )
             with col2:
                 category_counts = df["Category"].value_counts()
-                most_popular = (
-                    format_category(category_counts.index[0])
-                    if not category_counts.empty
-                    else "N/A"
-                )
+                most_popular_raw = category_counts.index[0] if not category_counts.empty else None
+                most_popular = format_category(most_popular_raw) if most_popular_raw else "N/A"
+                color_hex = CATEGORY_COLORS.get(most_popular_raw, "#333")
                 st.markdown(
-                    f"<div style='text-align:center;'><b>Most Popular Category</b><br><span style='font-size:1.5em'>{most_popular}</span></div>",
+                    f"<div style='text-align:center;'><b>Most Popular Category</b><br>"
+                    f"<span style='font-size:1.5em; color:{color_hex}'>{most_popular}</span></div>",
                     unsafe_allow_html=True,
                 )
             with col3:
@@ -380,12 +403,11 @@ def show_admin_page():
 
 
 def show_admin_button():
-    """Display floating admin button on main pages"""
-    st.markdown('<div class="admin-button-container">', unsafe_allow_html=True)
-    if st.button("🔐 Admin", key="admin_access_btn"):
-        st.session_state["show_admin"] = True
-        st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
+    """Display admin button in sidebar"""
+    with st.sidebar:
+        if st.button("🔐 Admin", key="admin_access_btn"):
+            st.session_state["show_admin"] = True
+            st.rerun()
 
 
 def main():
