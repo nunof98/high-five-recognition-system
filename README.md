@@ -4,14 +4,14 @@ A QR code-based recognition system.
 
 ## 🎯 Features
 
--   🎫 QR code scanning with unique token and color parameters
--   ✅ Token validation (checks if token has been used before)
--   💬 Recognition message submission form
--   📊 CSV-based storage
--   🔐 Admin dashboard with password protection
--   📥 Download data as CSV or Excel
--   📈 Statistics and analytics
--   📱 Mobile-responsive design
+- 🎫 QR code scanning with unique token and color parameters
+- ✅ Token validation (checks if token has been used before)
+- 💬 Recognition message submission form
+- 📊 CSV-based storage
+- 🔐 Admin dashboard with password protection
+- 📥 Download data as CSV or Excel
+- 📈 Statistics and analytics
+- 📱 Mobile-responsive design
 
 ## 🚀 Quick Start
 
@@ -32,7 +32,7 @@ echo 'ADMIN_PASSWORD = "your-password"' > .streamlit/secrets.toml
 streamlit run streamlit-app/app.py
 
 # Test it
-# User: http://localhost:8501?token=TEST001&color=blue
+# User: http://localhost:8501?token=TEST001&category=blue
 # Admin: http://localhost:8501?admin
 ````
 
@@ -56,32 +56,32 @@ streamlit run streamlit-app/app.py
 Generate QR codes with this URL format:
 
 ```
-https://highfive.streamlit.app?token=UNIQUE_TOKEN&color=COLOR_NAME
+https://highfive.streamlit.app?token=UNIQUE_TOKEN&category=COLOR_NAME
 ```
 
 **Examples:**
 
 ```
-https://highfive.streamlit.app?token=ABC123&color=orange
-https://highfive.streamlit.app?token=DEF456&color=blue
-https://highfive.streamlit.app?token=TEAM2025-001&color=green
+https://highfive.streamlit.app?token=ABC123&category=collaboration_excellence
+https://highfive.streamlit.app?token=DEF456&category=knowledge_growth
+https://highfive.streamlit.app?token=TEAM2025-001&category=supplier_management
 ```
 
 **Admin Access:**
 
 ```
-https://highfive.streamlit.app?token=admin&color=admin
+https://highfive.streamlit.app?token=admin&category=admin
 https://highfive.streamlit.app?admin
 ```
 
 ## 🎨 Supported Colors
 
--   red (#e74c3c)
--   blue (#3498db)
--   green (#2ecc71)
--   yellow (#f39c12)
--   purple (#9b59b6)
--   orange (#FF9900)
+- red (#e74c3c)
+- blue (#3498db)
+- green (#2ecc71)
+- yellow (#f39c12)
+- purple (#9b59b6)
+- orange (#FF9900)
 
 ## 📄 License
 

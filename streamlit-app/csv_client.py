@@ -19,7 +19,7 @@ class CSVClient:
         if not os.path.exists(self.csv_file):
             # Create empty CSV with headers
             df = pd.DataFrame(
-                columns=["TokenID", "Color", "Message", "SubmittedBy", "Timestamp"]
+                columns=["TokenID", "Category", "Message", "SubmittedBy", "Timestamp"]
             )
             df.to_csv(self.csv_file, index=False)
 
@@ -55,14 +55,14 @@ class CSVClient:
             raise Exception(f"Error checking token: {str(e)}")
 
     def add_token(
-        self, token: str, color: str, message: str, submitted_by: str
+        self, token: str, category: str, message: str, submitted_by: str
     ) -> bool:
         """
         Add a new token to CSV
 
         Args:
             token: The token ID
-            color: The token color
+            category: The token category
             message: The recognition message
             submitted_by: Name of person submitting
 
@@ -84,7 +84,7 @@ class CSVClient:
                 [
                     {
                         "TokenID": token,
-                        "Color": color,
+                        "Category": category,
                         "Message": message,
                         "SubmittedBy": submitted_by,
                         "Timestamp": timestamp,
