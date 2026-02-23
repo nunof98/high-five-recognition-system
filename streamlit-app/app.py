@@ -173,7 +173,7 @@ def show_new_token_form(token, category):
         st.markdown(
             f"""
         <div>
-            <label style="font-weight: 600; color: #555;">Token:</label>
+            <label style="font-weight: 600;">Token:</label>
             <div class="color-badge" style="color: {color_hex};">
                 {format_category(category).upper()}
             </div>
@@ -381,8 +381,12 @@ def show_admin_page():
                 )
             with col2:
                 category_counts = df["Category"].value_counts()
-                most_popular_raw = category_counts.index[0] if not category_counts.empty else None
-                most_popular = format_category(most_popular_raw) if most_popular_raw else "N/A"
+                most_popular_raw = (
+                    category_counts.index[0] if not category_counts.empty else None
+                )
+                most_popular = (
+                    format_category(most_popular_raw) if most_popular_raw else "N/A"
+                )
                 color_hex = CATEGORY_COLORS.get(most_popular_raw, "#333")
                 st.markdown(
                     f"<div style='text-align:center;'><b>Most Popular Category</b><br>"
