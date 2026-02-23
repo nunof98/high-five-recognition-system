@@ -4,7 +4,7 @@ A QR code-based recognition system.
 
 ## 🎯 Features
 
-- 🎫 QR code scanning with unique token and color parameters
+- 🎫 QR code scanning with unique token and category parameters
 - ✅ Token validation (checks if token has been used before)
 - 💬 Recognition message submission form
 - 📊 CSV-based storage
@@ -17,11 +17,10 @@ A QR code-based recognition system.
 
 ### Run Locally
 
-````bash
+```bash
 # Create a virtual environment
 uv venv
 
-```bash
 # Install dependencies
 uv sync
 
@@ -32,9 +31,9 @@ echo 'ADMIN_PASSWORD = "your-password"' > .streamlit/secrets.toml
 streamlit run streamlit-app/app.py
 
 # Test it
-# User: http://localhost:8501?token=TEST001&category=blue
+# User: http://localhost:8501?token=TEST001&category=collaboration_excellence
 # Admin: http://localhost:8501?admin
-````
+```
 
 ## 📋 How It Works
 
@@ -47,7 +46,7 @@ streamlit run streamlit-app/app.py
 
 ### For Admins
 
-1. **Access admin dashboard**
+1. **Access admin dashboard** (via `?admin` in the URL or the Admin button/sidebar)
 2. **Enter password**
 3. **View all submissions**, download data, see statistics
 
@@ -56,7 +55,7 @@ streamlit run streamlit-app/app.py
 Generate QR codes with this URL format:
 
 ```
-https://highfive.streamlit.app?token=UNIQUE_TOKEN&category=COLOR_NAME
+https://highfive.streamlit.app?token=UNIQUE_TOKEN&category=CATEGORY_NAME
 ```
 
 **Examples:**
@@ -70,18 +69,19 @@ https://highfive.streamlit.app?token=TEAM2025-001&category=supplier_management
 **Admin Access:**
 
 ```
-https://highfive.streamlit.app?token=admin&category=admin
 https://highfive.streamlit.app?admin
 ```
 
-## 🎨 Supported Colors
+## 🎨 Supported Bosch Categories & Colors
 
-- red (#e74c3c)
-- blue (#3498db)
-- green (#2ecc71)
-- yellow (#f39c12)
-- purple (#9b59b6)
-- orange (#FF9900)
+| Category                 | Color Name         | Hex       |
+| ------------------------ | ------------------ | --------- |
+| collaboration_excellence | Bosch Purple 40    | "#9E2896" |
+| knowledge_growth         | Bosch Blue 50      | #007BC0   |
+| supplier_management      | Bosch Turquoise 50 | #18837E   |
+| performance_delivery     | Bosch Green 50     | #00884A   |
+
+A Bosch brand color bar appears at the top of the app for visual identity.
 
 ## 📄 License
 
