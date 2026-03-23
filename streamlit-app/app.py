@@ -2,7 +2,7 @@ import io
 
 import pandas as pd
 import streamlit as st
-from csv_client import CSVClient
+from encrypted_csv_client import get_client
 
 # Admin password (change this or set in Streamlit secrets!)
 ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD")
@@ -208,7 +208,7 @@ def show_new_token_form(token, category):
             # Submit to CSV
             try:
                 with st.spinner("Sending your High Five..."):
-                    csv_client = CSVClient()
+                    csv_client = get_client()
                     success = csv_client.add_token(
                         token=token,
                         category=category,
@@ -274,7 +274,7 @@ def show_admin_page():
         st.session_state["access_granted_shown"] = True
 
     try:
-        csv_client = CSVClient()
+        csv_client = get_client()
         df = csv_client.get_all_data()
 
         if df.empty:
@@ -316,9 +316,7 @@ def show_admin_page():
                         # Get indices of selected rows
                         indices_to_delete = selected_rows.index.tolist()
 
-                        # Remove selected rows from original dataframe
-                        df_updated = df.drop(indices_to_delete)
-                        csv_client._save_data(df_updated)
+                        csv_client.delete_rows(indices_to_delete)
 
                         st.success(
                             f"✅ Successfully deleted {len(selected_rows)} record(s)!"
@@ -330,7 +328,7 @@ def show_admin_page():
             with col2:
                 if st.button("🗑️ Delete ALL Data", type="secondary", width="stretch"):
                     if st.session_state.get("confirm_delete_all", False):
-                        csv_client._save_data(pd.DataFrame(columns=df.columns))
+                        csv_client.delete_all()
                         st.session_state["confirm_delete_all"] = False
                         st.success("✅ All data deleted!")
                         st.rerun()
@@ -439,7 +437,7 @@ def main():
     # Initialize CSV client and check token
     try:
         with st.spinner("Checking your High Five token..."):
-            csv_client = CSVClient()
+            csv_client = get_client()
             existing_data = csv_client.check_token(token)
 
         if existing_data:
