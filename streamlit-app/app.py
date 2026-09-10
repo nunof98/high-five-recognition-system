@@ -1,8 +1,11 @@
+import html
 import io
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 from encrypted_csv_client import get_client
+from pyvis.network import Network
 
 # Admin password (change this or set in Streamlit secrets!)
 ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD")
@@ -259,6 +262,159 @@ def show_error_message(error_text):
     )
 
 
+def show_card_carousel(df):
+    """Display a continuously auto-scrolling ticker of submission cards (message + category color)"""
+    if df.empty:
+        st.info("No data yet!")
+        return
+
+    cards_html = "".join(
+        f"""
+        <div class="marquee-card" style="background-color: {CATEGORY_COLORS.get(row["Category"], "#333")}20; border-color: {CATEGORY_COLORS.get(row["Category"], "#333")};">
+            <div class="marquee-category" style="color: {CATEGORY_COLORS.get(row["Category"], "#333")};">
+                {format_category(row["Category"]).upper()}
+            </div>
+            <p>{html.escape(str(row["Message"]))}</p>
+        </div>
+        """
+        for _, row in df.iterrows()
+    )
+
+    # Duplicate the track once so the -50% translateX loop point is seamless; speed scales with card count
+    duration = max(20, len(df) * 5)
+    st.markdown(
+        f"""
+        <style>
+        .marquee-container {{
+            overflow: hidden;
+            width: 100%;
+            mask-image: linear-gradient(90deg, transparent, black 5%, black 95%, transparent);
+            -webkit-mask-image: linear-gradient(90deg, transparent, black 5%, black 95%, transparent);
+        }}
+        .marquee-track {{
+            display: flex;
+            width: max-content;
+            animation: hf-marquee-scroll {duration}s linear infinite;
+        }}
+        .marquee-track:hover {{
+            animation-play-state: paused;
+        }}
+        .marquee-card {{
+            flex: 0 0 auto;
+            width: 260px;
+            margin: 0 0.75rem;
+            padding: 1.5rem 1.25rem;
+            border-radius: 15px;
+            border: 2px solid;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+            text-align: center;
+        }}
+        .marquee-category {{
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 0.85em;
+        }}
+        .marquee-card p {{
+            font-size: 1.05em;
+            margin: 0.5rem 0 0;
+        }}
+        @keyframes hf-marquee-scroll {{
+            from {{ transform: translateX(0); }}
+            to {{ transform: translateX(-50%); }}
+        }}
+        </style>
+        <div class="marquee-container">
+            <div class="marquee-track">
+                {cards_html}
+                {cards_html}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def build_relationship_network(df) -> Network:
+    """Build an interactive Category <-> Submission <-> Person (SubmittedBy) network"""
+    net = Network(
+        height="600px",
+        width="100%",
+        directed=True,
+        bgcolor="#f5f5f5",
+        font_color="#222222",
+        cdn_resources="in_line",
+    )
+    net.force_atlas_2based(
+        gravity=-40, central_gravity=0.01, spring_length=120, spring_strength=0.06
+    )
+
+    seen_categories = set()
+    seen_people = set()
+
+    for idx, row in df.reset_index(drop=True).iterrows():
+        category = row["Category"]
+        person = str(row["SubmittedBy"]).strip()
+        message = str(row["Message"])
+        color_hex = CATEGORY_COLORS.get(category, "#333333")
+
+        cat_id = f"cat::{category}"
+        if category not in seen_categories:
+            net.add_node(
+                cat_id,
+                label=format_category(category),
+                shape="box",
+                color=color_hex,
+                font={"color": "white", "size": 16},
+                size=25,
+            )
+            seen_categories.add(category)
+
+        person_id = f"person::{person}"
+        if person not in seen_people:
+            net.add_node(
+                person_id,
+                label=person,
+                shape="ellipse",
+                color="#EEEEEE",
+                font={"color": "#333333"},
+                size=18,
+            )
+            seen_people.add(person)
+
+        # Submission node id falls back to row position since TokenID may repeat/be missing
+        submission_id = f"sub::{row.get('TokenID') or idx}"
+        short_message = message if len(message) <= 30 else message[:27] + "..."
+        net.add_node(
+            submission_id,
+            label=short_message,
+            title=html.escape(message),  # tooltip is rendered as HTML by vis-network
+            shape="dot",
+            color=color_hex,
+            size=10,
+            font={"size": 10},
+        )
+
+        net.add_edge(person_id, submission_id, color=color_hex)
+        net.add_edge(submission_id, cat_id, color=color_hex)
+
+    return net
+
+
+def show_relationship_map(df):
+    """Display a mind map connecting each submission to its category and person"""
+    if df.empty:
+        st.info("No data yet!")
+        return
+
+    try:
+        net = build_relationship_network(df)
+        components.html(net.generate_html(), height=650, scrolling=True)
+    except Exception as e:
+        st.error(f"Error rendering relationship map: {str(e)}")
+
+
+
 def show_admin_page():
     """Display admin page for viewing and managing data"""
     st.markdown("# 🔐 Admin Dashboard")
@@ -280,125 +436,148 @@ def show_admin_page():
         if df.empty:
             st.info("No data yet!")
         else:
-            st.markdown(f"### Total Submissions: {len(df)}")
+            tab_overview, tab_table = st.tabs(["🃏 Cards & Mind Map", "📋 Table"])
 
-            # Add a selection column for deletion
-            df_display = df.copy()
-            df_display.insert(0, "Select", False)
+            with tab_overview:
+                show_card_carousel(df)
+                st.markdown("---")
+                st.markdown("### 🕸️ Relationship Mind Map")
+                show_relationship_map(df)
 
-            # Display editable dataframe with checkboxes
-            st.markdown("#### All Submissions")
+            with tab_table:
+                st.markdown(f"### Total Submissions: {len(df)}")
 
-            edited_df = st.data_editor(
-                df_display,
-                hide_index=True,
-                width="stretch",
-                column_config={
-                    "Select": st.column_config.CheckboxColumn(
-                        "Select",
-                        help="Select records to delete",
-                        default=False,
-                    )
-                },
-                disabled=["TokenID", "Category", "Message", "SubmittedBy", "Timestamp"],
-            )
+                # Add a selection column for deletion
+                df_display = df.copy()
+                df_display.insert(0, "Select", False)
 
-            # Delete selected records
-            selected_rows = edited_df[edited_df["Select"]]
+                # Display editable dataframe with checkboxes
+                st.markdown("#### All Submissions")
 
-            if len(selected_rows) > 0:
+                edited_df = st.data_editor(
+                    df_display,
+                    hide_index=True,
+                    width="stretch",
+                    column_config={
+                        "Select": st.column_config.CheckboxColumn(
+                            "Select",
+                            help="Select records to delete",
+                            default=False,
+                        )
+                    },
+                    disabled=[
+                        "TokenID",
+                        "Category",
+                        "Message",
+                        "SubmittedBy",
+                        "Timestamp",
+                    ],
+                )
+
+                # Delete selected records
+                selected_rows = edited_df[edited_df["Select"]]
+
+                if len(selected_rows) > 0:
+                    col1, col2, col3 = st.columns([1, 2, 1])
+                    with col2:
+                        if st.button(
+                            f"🗑️ Delete {len(selected_rows)} Record(s)",
+                            width="stretch",
+                        ):
+                            # Get indices of selected rows
+                            indices_to_delete = selected_rows.index.tolist()
+
+                            csv_client.delete_rows(indices_to_delete)
+
+                            st.success(
+                                f"✅ Successfully deleted {len(selected_rows)} record(s)!"
+                            )
+                            st.rerun()
+
+                # Delete all data button
                 col1, col2, col3 = st.columns([1, 2, 1])
                 with col2:
                     if st.button(
-                        f"🗑️ Delete {len(selected_rows)} Record(s)",
-                        width="stretch",
+                        "🗑️ Delete ALL Data", type="secondary", width="stretch"
                     ):
-                        # Get indices of selected rows
-                        indices_to_delete = selected_rows.index.tolist()
+                        if st.session_state.get("confirm_delete_all", False):
+                            csv_client.delete_all()
+                            st.session_state["confirm_delete_all"] = False
+                            st.success("✅ All data deleted!")
+                            st.rerun()
+                        else:
+                            st.session_state["confirm_delete_all"] = True
+                            st.rerun()
 
-                        csv_client.delete_rows(indices_to_delete)
+                if st.session_state.get("confirm_delete_all", False):
+                    st.warning(
+                        "⚠️ Are you sure? Click **Delete ALL Data** again to confirm."
+                    )
 
-                        st.success(
-                            f"✅ Successfully deleted {len(selected_rows)} record(s)!"
-                        )
-                        st.rerun()
+                st.markdown("---")
 
-            # Delete all data button
-            col1, col2, col3 = st.columns([1, 2, 1])
-            with col2:
-                if st.button("🗑️ Delete ALL Data", type="secondary", width="stretch"):
-                    if st.session_state.get("confirm_delete_all", False):
-                        csv_client.delete_all()
-                        st.session_state["confirm_delete_all"] = False
-                        st.success("✅ All data deleted!")
-                        st.rerun()
-                    else:
-                        st.session_state["confirm_delete_all"] = True
-                        st.rerun()
+                # Centered download buttons
+                st.markdown("#### Download Data")
+                spacer1, col1, col2, spacer2 = st.columns([1, 2, 2, 1])
+                with col1:
+                    csv = df.to_csv(index=False).encode("utf-8")
+                    st.download_button(
+                        label="📥 Download CSV",
+                        data=csv,
+                        file_name="highfive_data.csv",
+                        mime="text/csv",
+                        width="stretch",
+                    )
+                with col2:
+                    buffer = io.BytesIO()
+                    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+                        df.to_excel(writer, index=False, sheet_name="HighFives")
+                    st.download_button(
+                        label="📥 Download Excel",
+                        data=buffer.getvalue(),
+                        file_name="highfive_data.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        width="stretch",
+                    )
 
-            if st.session_state.get("confirm_delete_all", False):
-                st.warning(
-                    "⚠️ Are you sure? Click **Delete ALL Data** again to confirm."
-                )
+                st.markdown("---")
 
-            st.markdown("---")
-
-            # Centered download buttons
-            st.markdown("#### Download Data")
-            spacer1, col1, col2, spacer2 = st.columns([1, 2, 2, 1])
-            with col1:
-                csv = df.to_csv(index=False).encode("utf-8")
-                st.download_button(
-                    label="📥 Download CSV",
-                    data=csv,
-                    file_name="highfive_data.csv",
-                    mime="text/csv",
-                    width="stretch",
-                )
-            with col2:
-                buffer = io.BytesIO()
-                with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-                    df.to_excel(writer, index=False, sheet_name="HighFives")
-                st.download_button(
-                    label="📥 Download Excel",
-                    data=buffer.getvalue(),
-                    file_name="highfive_data.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    width="stretch",
-                )
-
-            st.markdown("---")
-
-            # Statistics
-            st.markdown("### Statistics")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.markdown(
-                    f"<div style='text-align:center;'><b>Total High Fives</b><br><span style='font-size:1.5em'>{len(df)}</span></div>",
-                    unsafe_allow_html=True,
-                )
-            with col2:
-                category_counts = df["Category"].value_counts()
-                most_popular_raw = (
-                    category_counts.index[0] if not category_counts.empty else None
-                )
-                most_popular = (
-                    format_category(most_popular_raw) if most_popular_raw else "N/A"
-                )
-                color_hex = CATEGORY_COLORS.get(most_popular_raw, "#333")
-                st.markdown(
-                    f"<div style='text-align:center;'><b>Most Popular Category</b><br>"
-                    f"<span style='font-size:1.5em; color:{color_hex}'>{most_popular}</span></div>",
-                    unsafe_allow_html=True,
-                )
-            with col3:
-                recent = (
-                    str(df.tail(1)["Timestamp"].values[0]) if not df.empty else "N/A"
-                )
-                st.markdown(
-                    f"<div style='text-align:center;'><b>Most Recent</b><br><span style='font-size:1.1em'>{recent}</span></div>",
-                    unsafe_allow_html=True,
-                )
+                # Statistics
+                st.markdown("### Statistics")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.markdown(
+                        f"<div style='text-align:center;'><b>Total High Fives</b><br><span style='font-size:1.5em'>{len(df)}</span></div>",
+                        unsafe_allow_html=True,
+                    )
+                with col2:
+                    category_counts = df["Category"].value_counts()
+                    most_popular_raw = (
+                        category_counts.index[0]
+                        if not category_counts.empty
+                        else None
+                    )
+                    most_popular = (
+                        format_category(most_popular_raw)
+                        if most_popular_raw
+                        else "N/A"
+                    )
+                    color_hex = CATEGORY_COLORS.get(most_popular_raw, "#333")
+                    st.markdown(
+                        f"<div style='text-align:center;'><b>Most Popular Category</b><br>"
+                        f"<span style='font-size:1.5em; color:{color_hex}'>{most_popular}</span></div>",
+                        unsafe_allow_html=True,
+                    )
+                with col3:
+                    recent = (
+                        str(df.tail(1)["Timestamp"].values[0])
+                        if not df.empty
+                        else "N/A"
+                    )
+                    st.markdown(
+                        f"<div style='text-align:center;'><b>Most Recent</b><br><span style='font-size:1.1em'>{recent}</span></div>",
+                        unsafe_allow_html=True,
+                    )
 
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
