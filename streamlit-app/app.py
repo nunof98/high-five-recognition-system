@@ -87,6 +87,11 @@ st.markdown(
         # border: 2px solid;
         border-radius: 8px;
     }
+    /* Streamlit wraps components.v1.html in a bordered/backgrounded iframe container; strip both so the mind map blends in */
+    div[data-testid="stIFrame"], iframe {
+        border: none !important;
+        background: transparent !important;
+    }
 </style>
 """,
     unsafe_allow_html=True,
@@ -337,16 +342,43 @@ def show_card_carousel(df):
 
 def build_relationship_network(df) -> Network:
     """Build an interactive Category <-> Submission <-> Person (SubmittedBy) network"""
+    # Match node label color to the active Streamlit theme since the canvas background is transparent
+    label_color = "#FAFAFA" if st.get_option("theme.base") == "dark" else "#31333F"
+
     net = Network(
         height="600px",
         width="100%",
         directed=True,
-        bgcolor="#f5f5f5",
-        font_color="#222222",
+        bgcolor="rgba(0,0,0,0)",
+        font_color=label_color,
         cdn_resources="in_line",
     )
-    net.force_atlas_2based(
-        gravity=-40, central_gravity=0.01, spring_length=120, spring_strength=0.06
+    net.set_options(
+        """
+        {
+          "physics": {
+            "solver": "forceAtlas2Based",
+            "forceAtlas2Based": {
+              "gravitationalConstant": -60,
+              "centralGravity": 0.008,
+              "springLength": 140,
+              "springConstant": 0.05,
+              "damping": 0.5
+            },
+            "minVelocity": 0.75
+          },
+          "nodes": {
+            "shape": "dot",
+            "borderWidth": 2
+          },
+          "edges": {
+            "smooth": {"type": "continuous"},
+            "color": {"opacity": 0.5},
+            "width": 1
+          },
+          "interaction": {"hover": true}
+        }
+        """
     )
 
     seen_categories = set()
@@ -363,10 +395,12 @@ def build_relationship_network(df) -> Network:
             net.add_node(
                 cat_id,
                 label=format_category(category),
-                shape="box",
+                shape="circle",
                 color=color_hex,
-                font={"color": "white", "size": 16},
-                size=25,
+                font={"color": "white", "size": 13, "bold": True},
+                borderWidth=3,
+                widthConstraint={"minimum": 75, "maximum": 75},
+                heightConstraint={"minimum": 75, "maximum": 75},
             )
             seen_categories.add(category)
 
@@ -375,24 +409,24 @@ def build_relationship_network(df) -> Network:
             net.add_node(
                 person_id,
                 label=person,
-                shape="ellipse",
-                color="#EEEEEE",
-                font={"color": "#333333"},
-                size=18,
+                shape="circle",
+                color="#B0B0B0",
+                font={"color": "#222222", "size": 11},
+                widthConstraint={"minimum": 60, "maximum": 60},
+                heightConstraint={"minimum": 60, "maximum": 60},
             )
             seen_people.add(person)
 
         # Submission node id falls back to row position since TokenID may repeat/be missing
         submission_id = f"sub::{row.get('TokenID') or idx}"
-        short_message = message if len(message) <= 30 else message[:27] + "..."
         net.add_node(
             submission_id,
-            label=short_message,
+            # pyvis falls back to the node id as the label when label is falsy, so use a blank space instead of ""
+            label=" ",
             title=html.escape(message),  # tooltip is rendered as HTML by vis-network
             shape="dot",
             color=color_hex,
-            size=10,
-            font={"size": 10},
+            size=8,
         )
 
         net.add_edge(person_id, submission_id, color=color_hex)
@@ -409,10 +443,22 @@ def show_relationship_map(df):
 
     try:
         net = build_relationship_network(df)
-        components.html(net.generate_html(), height=650, scrolling=True)
+        html_source = net.generate_html()
+        # pyvis always loads Bootstrap from a CDN and wraps the network in a Bootstrap .card,
+        # which has its own opaque white background/border independent of #mynetwork's own styling
+        html_source = html_source.replace(
+            "<head>",
+            "<head><style>"
+            "html, body { background-color: transparent !important; margin: 0; } "
+            "#mynetwork, .card, .card-body { "
+            "border: none !important; background-color: transparent !important; box-shadow: none !important; "
+            "}"
+            "</style>",
+            1,
+        )
+        components.html(html_source, height=650, scrolling=True)
     except Exception as e:
         st.error(f"Error rendering relationship map: {str(e)}")
-
 
 
 def show_admin_page():
@@ -553,14 +599,10 @@ def show_admin_page():
                 with col2:
                     category_counts = df["Category"].value_counts()
                     most_popular_raw = (
-                        category_counts.index[0]
-                        if not category_counts.empty
-                        else None
+                        category_counts.index[0] if not category_counts.empty else None
                     )
                     most_popular = (
-                        format_category(most_popular_raw)
-                        if most_popular_raw
-                        else "N/A"
+                        format_category(most_popular_raw) if most_popular_raw else "N/A"
                     )
                     color_hex = CATEGORY_COLORS.get(most_popular_raw, "#333")
                     st.markdown(
