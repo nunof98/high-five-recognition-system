@@ -147,6 +147,9 @@ def display_existing_message(data):
     st.markdown("# 🎉 High Five Already Given!")
 
     color_hex = CATEGORY_COLORS.get(data["Category"], "#333")
+    # escape untrusted input and hard-break newlines so an embedded blank line can't
+    # terminate the surrounding raw-HTML block (st.markdown treats it as plain Markdown after that)
+    safe_message = html.escape(str(data["Message"])).replace("\n", "<br>")
 
     st.markdown(
         f"""
@@ -156,7 +159,7 @@ def display_existing_message(data):
                 {format_category(data["Category"]).upper()} Token
             </div>
             <p style="font-size: 1.2em; margin: 15px 0; background-color: {color_hex}; color: white; border-radius: 8px; padding: 10px;">
-                <strong>"{data["Message"]}"</strong>
+                <strong>"{safe_message}"</strong>
             </p>
             <p style="color: #999; font-size: 0.8em; margin-top: 10px;">
                 {data["Timestamp"]}
@@ -293,9 +296,11 @@ def show_card_carousel(df):
             <div class="marquee-category" style="color: {CATEGORY_COLORS.get(row["Category"], "#333")};">
                 {format_category(row["Category"]).upper()}
             </div>
-            <p>{html.escape(str(row["Message"]))}</p>
+            <p>{html.escape(str(row["Message"])).replace(chr(10), "<br>")}</p>
         </div>
         """
+        # hard-break newlines: a literal blank line from a multi-line message would otherwise
+        # terminate st.markdown's raw-HTML block partway through the marquee
         for _, row in df.iterrows()
     )
 
