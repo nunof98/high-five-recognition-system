@@ -356,8 +356,12 @@ def show_card_carousel(df):
 
 def build_relationship_network(df) -> Network:
     """Build an interactive Category <-> Submission <-> Person (SubmittedBy) network"""
-    # Match node label/fill color to the active Streamlit theme since the canvas background is transparent
-    is_dark = st.get_option("theme.base") == "dark"
+    # st.context.theme reflects the live client theme (incl. user overrides), unlike the static
+    # st.get_option("theme.base") config default, matching how the card carousel reacts to theme
+    try:
+        is_dark = st.context.theme.type == "dark"
+    except Exception:
+        is_dark = st.get_option("theme.base") == "dark"
     label_color = "#FAFAFA" if is_dark else "#31333F"
     person_bg_color = "#000000" if is_dark else "#FFFFFF"
 
@@ -485,6 +489,15 @@ def show_relationship_map(df):
             "</style>",
             1,
         )
+        # Same best-effort theme guess as build_relationship_network, used only as a JS fallback
+        # if reading the parent document's live CSS variables fails (see getLiveThemeColors below)
+        try:
+            is_dark = st.context.theme.type == "dark"
+        except Exception:
+            is_dark = st.get_option("theme.base") == "dark"
+        fallback_text_color = "#FAFAFA" if is_dark else "#31333F"
+        fallback_bg_color = "#000000" if is_dark else "#FFFFFF"
+
         # vis-network canvas doesn't support CSS gradients, so paint the brandline gradient ring
         # around each transparent person node manually after every network redraw
         gradient_stops_js = ", ".join(f'"{c}"' for c in BRANDLINE_GRADIENT_STOPS)
@@ -493,6 +506,28 @@ def show_relationship_map(df):
         (function() {{
             var GRADIENT_STOPS = [{gradient_stops_js}];
             var FALLBACK_RADIUS = {PERSON_NODE_RADIUS};
+            var FALLBACK_TEXT_COLOR = "{fallback_text_color}";
+            var FALLBACK_BG_COLOR = "{fallback_bg_color}";
+
+            // Read the live theme colors straight from the parent app's CSS variables (same
+            // source the card carousel relies on), since this iframe has no theme of its own
+            // and Python-side theme detection can lag or be wrong right after a theme switch.
+            function getLiveThemeColors() {{
+                try {{
+                    var parentStyle = window.parent.getComputedStyle(
+                        window.parent.document.documentElement
+                    );
+                    var textColor = parentStyle.getPropertyValue("--text-color").trim();
+                    var bgColor = parentStyle.getPropertyValue("--background-color").trim();
+                    if (textColor && bgColor) {{
+                        return {{ text: textColor, bg: bgColor }};
+                    }}
+                }} catch (e) {{
+                    // cross-origin or unavailable; fall back to the server-rendered guess
+                }}
+                return {{ text: FALLBACK_TEXT_COLOR, bg: FALLBACK_BG_COLOR }};
+            }}
+
             function attachPersonRingRenderer() {{
                 if (typeof network === "undefined" || typeof nodes === "undefined") {{
                     setTimeout(attachPersonRingRenderer, 50);
@@ -502,6 +537,21 @@ def show_relationship_map(df):
                     return String(id).indexOf("person::") === 0;
                 }});
                 if (personIds.length === 0) return;
+
+                var colors = getLiveThemeColors();
+                nodes.update(personIds.map(function (id) {{
+                    return {{
+                        id: id,
+                        color: {{
+                            background: colors.bg,
+                            border: colors.bg,
+                            highlight: {{ background: colors.bg, border: colors.bg }},
+                            hover: {{ background: colors.bg, border: colors.bg }},
+                        }},
+                        font: {{ color: colors.text, size: 11 }},
+                    }};
+                }}));
+
                 network.on("afterDrawing", function (ctx) {{
                     personIds.forEach(function (id) {{
                         var nodeObj = network.body.nodes[id];
@@ -565,7 +615,7 @@ def show_admin_page():
             with tab_overview:
                 show_card_carousel(df)
                 st.markdown("---")
-                st.markdown("### Relationship Mind Map")
+                st.markdown("### Relationship Map")
                 show_relationship_map(df)
 
             with tab_table:
