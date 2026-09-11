@@ -105,6 +105,20 @@ CATEGORY_COLORS = {
     "performance_delivery": "#00884A",
 }
 
+# Left-to-right color stops sampled from static/brandline.png, used for the person-node ring in the mind map
+BRANDLINE_GRADIENT_STOPS = [
+    "#7A1F3D",
+    "#D31F3C",
+    "#5B2A8C",
+    "#2E4A9E",
+    "#3F97C9",
+    "#2FAE6A",
+    "#8DC63F",
+]
+
+# Fixed radius (px) of person nodes, matching their widthConstraint/heightConstraint (60) in build_relationship_network
+PERSON_NODE_RADIUS = 30
+
 
 def get_query_params():
     """Get parameters from URL query parameters"""
@@ -342,8 +356,10 @@ def show_card_carousel(df):
 
 def build_relationship_network(df) -> Network:
     """Build an interactive Category <-> Submission <-> Person (SubmittedBy) network"""
-    # Match node label color to the active Streamlit theme since the canvas background is transparent
-    label_color = "#FAFAFA" if st.get_option("theme.base") == "dark" else "#31333F"
+    # Match node label/fill color to the active Streamlit theme since the canvas background is transparent
+    is_dark = st.get_option("theme.base") == "dark"
+    label_color = "#FAFAFA" if is_dark else "#31333F"
+    person_bg_color = "#000000" if is_dark else "#FFFFFF"
 
     net = Network(
         height="600px",
@@ -399,8 +415,8 @@ def build_relationship_network(df) -> Network:
                 color=color_hex,
                 font={"color": "white", "size": 13, "bold": True},
                 borderWidth=3,
-                widthConstraint={"minimum": 75, "maximum": 75},
-                heightConstraint={"minimum": 75, "maximum": 75},
+                widthConstraint={"minimum": 100, "maximum": 100},
+                heightConstraint={"minimum": 100, "maximum": 100},
             )
             seen_categories.add(category)
 
@@ -410,8 +426,21 @@ def build_relationship_network(df) -> Network:
                 person_id,
                 label=person,
                 shape="circle",
-                color="#B0B0B0",
-                font={"color": "#222222", "size": 11},
+                # solid theme-colored fill hides where edges terminate inside the node;
+                # the gradient ring is painted on top via afterDrawing (see show_relationship_map)
+                color={
+                    "background": person_bg_color,
+                    "border": person_bg_color,
+                    "highlight": {
+                        "background": person_bg_color,
+                        "border": person_bg_color,
+                    },
+                    "hover": {"background": person_bg_color, "border": person_bg_color},
+                },
+                font={"color": label_color, "size": 11},
+                # vis-network's circle shape clips edges using "size" (default 25), not widthConstraint,
+                # so without this edges terminate inside our gradient ring instead of at its perimeter
+                size=PERSON_NODE_RADIUS,
                 widthConstraint={"minimum": 60, "maximum": 60},
                 heightConstraint={"minimum": 60, "maximum": 60},
             )
@@ -456,6 +485,55 @@ def show_relationship_map(df):
             "</style>",
             1,
         )
+        # vis-network canvas doesn't support CSS gradients, so paint the brandline gradient ring
+        # around each transparent person node manually after every network redraw
+        gradient_stops_js = ", ".join(f'"{c}"' for c in BRANDLINE_GRADIENT_STOPS)
+        ring_script = f"""
+        <script type="text/javascript">
+        (function() {{
+            var GRADIENT_STOPS = [{gradient_stops_js}];
+            var FALLBACK_RADIUS = {PERSON_NODE_RADIUS};
+            function attachPersonRingRenderer() {{
+                if (typeof network === "undefined" || typeof nodes === "undefined") {{
+                    setTimeout(attachPersonRingRenderer, 50);
+                    return;
+                }}
+                var personIds = nodes.getIds().filter(function (id) {{
+                    return String(id).indexOf("person::") === 0;
+                }});
+                if (personIds.length === 0) return;
+                network.on("afterDrawing", function (ctx) {{
+                    personIds.forEach(function (id) {{
+                        var nodeObj = network.body.nodes[id];
+                        if (!nodeObj) return;
+                        // read the node's own post-layout box so the ring always matches the
+                        // (invisible) circle vis-network actually clips edges against
+                        var shape = nodeObj.shape;
+                        var radius = (shape && shape.width)
+                            ? Math.max(shape.width, shape.height) / 2
+                            : FALLBACK_RADIUS;
+                        var x = nodeObj.x;
+                        var y = nodeObj.y;
+                        var gradient = ctx.createLinearGradient(x - radius, y, x + radius, y);
+                        GRADIENT_STOPS.forEach(function (color, i) {{
+                            gradient.addColorStop(i / (GRADIENT_STOPS.length - 1), color);
+                        }});
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                        ctx.lineWidth = 3;
+                        ctx.strokeStyle = gradient;
+                        ctx.stroke();
+                        ctx.restore();
+                    }});
+                }});
+                network.redraw();
+            }}
+            attachPersonRingRenderer();
+        }})();
+        </script>
+        """
+        html_source = html_source.replace("</body>", ring_script + "</body>", 1)
         components.html(html_source, height=650, scrolling=True)
     except Exception as e:
         st.error(f"Error rendering relationship map: {str(e)}")
@@ -487,7 +565,7 @@ def show_admin_page():
             with tab_overview:
                 show_card_carousel(df)
                 st.markdown("---")
-                st.markdown("### 🕸️ Relationship Mind Map")
+                st.markdown("### Relationship Mind Map")
                 show_relationship_map(df)
 
             with tab_table:
