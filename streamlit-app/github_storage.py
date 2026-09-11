@@ -15,8 +15,7 @@ def _headers() -> dict:
 
 def _api_url(path: str) -> str:
     repo = st.secrets["github"]["repo"]
-    api_base = st.secrets["github"]["api_base"]
-    return f"{api_base}/repos/{repo}/contents/{path}"
+    return f"https://api.github.com/repos/{repo}/contents/{path}"
 
 
 def get_file(path: str) -> tuple[bytes, str]:
@@ -47,6 +46,8 @@ def put_file(
     if sha:
         payload["sha"] = sha
 
-    resp = requests.put(_api_url(path), headers=_headers(), json=payload, timeout=15)
+    resp = requests.put(
+        _api_url(path), headers=_headers(), json=payload, timeout=15
+    )
     resp.raise_for_status()
     return resp.json()["content"]["sha"]
